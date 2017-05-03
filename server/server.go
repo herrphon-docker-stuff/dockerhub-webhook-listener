@@ -1,41 +1,22 @@
-package listener
+package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
-	"bytes"
+
+	"./api"
+	"./handler"
 )
 
-var msgHandlers Registry
-
-type HubMessage struct {
-	Callback_url string
-	Repository struct {
-		Status    string
-		RepoUrl   string `json:"repo_url"`
-		Owner     string
-		IsPrivate bool `json:"is_private"`
-		Name      string
-		StarCount int    `json:"star_count"`
-		RepoName  string `json:"repo_name"`
-	}
-
-	Push_data struct {
-		PushedAt int `json:"pushed_at"`
-		Images   []string
-		Pusher   string
-	}
-}
-
 type CallbackMessage struct {
-	State            string `json:"state"`
-	Description      string `json:"description"`
+	State       string `json:"state"`
+	Description string `json:"description"`
 }
 
 type Config struct {
 	ListenAddr string
-	Mailgun    mailGunConfig
 	Tls        struct {
 		Key  string
 		Cert string
@@ -45,16 +26,27 @@ type Config struct {
 	}
 }
 
-var ServerConfig *Config
-var client = &http.Client{}
+var httpClient = &http.Client{}
+var config *Config
+var handlers HandlerRegistry
 
-func Serve(config *Config) error {
-	ServerConfig = config
-	if len(ServerConfig.Apikeys.Key) == 0 {
+func NewServer(config *Config) error {
+	config = config
+	return nil
+}
+
+func RegisterHandler() {
+	handlers.Add((&handler.Logger{}).Call)
+
+	// handlers.Add((&listener.Mailgun{config.Mailgun}).Call)
+}
+
+func Serve() error {
+	if len(config.Apikeys.Key) == 0 {
 		log.Print("Warning: The server is about to start without any authentication.  Anyone can trigger handlers to fire off")
 		log.Print("To enable authentication, you must add an `apikeys` section with at least 1 `key`")
 	}
-	msgHandlers = MsgHandlers()
+
 	http.HandleFunc("/", reqHandler)
 	if config.Tls.Key != "" && config.Tls.Cert != "" {
 		log.Print("Starting with SSL")
@@ -84,7 +76,7 @@ func sendCallback(callbackUrl string, msg *CallbackMessage) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	_, err = client.Do(req)
+	_, err = httpClient.Do(req)
 
 	if err != nil {
 		log.Print("Failed to request callback")
@@ -97,7 +89,7 @@ func sendCallback(callbackUrl string, msg *CallbackMessage) {
 
 func reqHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	var imgConfig HubMessage
+	var imgConfig api.HubMessage
 
 	err := decoder.Decode(&imgConfig)
 	if err != nil {
@@ -113,7 +105,7 @@ func reqHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, "Not Authorized", 401)
 	sendCallback(imgConfig.Callback_url, &CallbackMessage{
-		State: "failure",
+		State:       "failure",
 		Description: "Not authorized",
 	})
 }
@@ -125,21 +117,25 @@ func Log(handler http.Handler) http.Handler {
 	})
 }
 
-func handleMsg(img HubMessage) {
-	msgHandlers.Call(img)
-	sendCallback(img.Callback_url, &CallbackMessage{
-		State: "success",
-		Description: "Hook successfully received",
-	})
-}
-
 func authenticateRequest(r *http.Request) bool {
 	key := r.URL.Query().Get("apikey")
-	for _, cfgKey := range ServerConfig.Apikeys.Key {
+	for _, cfgKey := range config.Apikeys.Key {
 		if key == cfgKey {
 			return true
 		}
 		continue
 	}
-	return (len(ServerConfig.Apikeys.Key) == 0) || false
+	return (len(config.Apikeys.Key) == 0) || false
+}
+
+func handleMsg(msg api.HubMessage) {
+	handlers.Call(msg)
+
+	/*
+		//TODO: fix callback later
+		sendCallback(img.Callback_url, &CallbackMessage{
+			State: "success",
+			Description: "Hook successfully received",
+		})
+	*/
 }

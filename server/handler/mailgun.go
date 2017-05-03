@@ -1,17 +1,19 @@
-package listener
+package handler
 
 import (
 	"encoding/json"
 	"log"
 
+	"../api"
+
 	"github.com/sirsean/go-mailgun/mailgun"
 )
 
 type Mailgun struct {
-	mailGunConfig
+	Config
 }
 
-type mailGunConfig struct {
+type Config struct {
 	From   string
 	To     []string
 	Name   string
@@ -19,7 +21,7 @@ type mailGunConfig struct {
 	Domain string
 }
 
-func (m *Mailgun) Call(hubMsg HubMessage) {
+func (m *Mailgun) Call(hubMsg api.HubMessage) {
 	msg := mailgun.Message{
 		FromName:      m.Name,
 		FromAddress:   m.From,
