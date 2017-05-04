@@ -21,7 +21,7 @@ type Docker struct {
 func (d *Docker) Call(hubMsg api.HubMessage) {
 	d.pullImage()
 	d.stopContainer()
-	d.removeContainer()
+	// d.removeContainer()
 	d.startBackgroundContainer()
 }
 

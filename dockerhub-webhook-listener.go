@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"./server"
+	"./server/api"
 
 	"gopkg.in/gcfg.v1"
 	"os"
@@ -17,18 +18,18 @@ func main() {
 	}
 
 	log.Printf("Starting server on %s", config.ListenAddr)
-	server.NewServer(config)
-	if err := server.Serve(); err != nil {
+	s := server.New(config)
+	if err := s.Serve(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func getConfig() (*server.Config, error) {
+func getConfig() (*api.Config, error) {
 	var listenAddr = flag.String("listen", "localhost:8080", "<address>:<port> to listen on")
 	var configFile = flag.String("config-file", "", "Location of handler config file")
 	flag.Parse()
 
-	config := &server.Config{}
+	config := &api.Config{}
 
 	if *configFile != "" {
 		err := gcfg.ReadFileInto(config, *configFile)

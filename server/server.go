@@ -10,55 +10,40 @@ import (
 	"./handler"
 )
 
-type CallbackMessage struct {
-	State       string `json:"state"`
-	Description string `json:"description"`
+type Server struct {
+	httpClient *http.Client
+	config     *api.Config
+	handlers   HandlerRegistry
 }
 
-type Config struct {
-	ListenAddr string
-	Tls        struct {
-		Key  string
-		Cert string
-	}
-	Apikeys struct {
-		Key []string
-	}
+func New (config *api.Config) *Server {
+	return &Server{&http.Client{}, config, HandlerRegistry{}}
 }
 
-var httpClient = &http.Client{}
-var config *Config
-var handlers HandlerRegistry
-
-func NewServer(config *Config) error {
-	config = config
-	return nil
-}
-
-func RegisterHandler() {
-	handlers.Add((&handler.Logger{}).Call)
+func (s *Server) RegisterHandler() {
+	s.handlers.Add((&handler.Logger{}).Call)
 
 	// handlers.Add((&listener.Mailgun{config.Mailgun}).Call)
 }
 
-func Serve() error {
-	if len(config.Apikeys.Key) == 0 {
+func (s *Server) Serve() error {
+	if len(s.config.Apikeys.Key) == 0 {
 		log.Print("Warning: The server is about to start without any authentication.  Anyone can trigger handlers to fire off")
 		log.Print("To enable authentication, you must add an `apikeys` section with at least 1 `key`")
 	}
 
-	http.HandleFunc("/", reqHandler)
-	if config.Tls.Key != "" && config.Tls.Cert != "" {
+	http.HandleFunc("/", s.reqHandler)
+	if s.config.Tls.Key != "" && s.config.Tls.Cert != "" {
 		log.Print("Starting with SSL")
-		return http.ListenAndServeTLS(config.ListenAddr, config.Tls.Cert, config.Tls.Key, Log(http.DefaultServeMux))
+		return http.ListenAndServeTLS(s.config.ListenAddr, s.config.Tls.Cert, s.config.Tls.Key, Log(http.DefaultServeMux))
 	}
 	log.Print("Warning: Server is starting without SSL, you should not pass any credentials using this configuration")
 	log.Print("To use SSL, you must provide a config file with a [tls] section, and provide locations to a `key` file and a `cert` file")
-	return http.ListenAndServe(config.ListenAddr, Log(http.DefaultServeMux))
+	return http.ListenAndServe(s.config.ListenAddr, Log(http.DefaultServeMux))
 }
 
 // Send callback request
-func sendCallback(callbackUrl string, msg *CallbackMessage) {
+func (s *Server) sendCallback(callbackUrl string, msg *api.CallbackMessage) {
 	log.Printf("Send callback to %s", callbackUrl)
 
 	jsonStr, err := json.Marshal(msg)
@@ -76,7 +61,7 @@ func sendCallback(callbackUrl string, msg *CallbackMessage) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	_, err = httpClient.Do(req)
+	_, err = s.httpClient.Do(req)
 
 	if err != nil {
 		log.Print("Failed to request callback")
@@ -87,7 +72,7 @@ func sendCallback(callbackUrl string, msg *CallbackMessage) {
 	log.Print("Succeeded to request callback")
 }
 
-func reqHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) reqHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var imgConfig api.HubMessage
 
@@ -98,13 +83,13 @@ func reqHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authenticateRequest(r) {
-		go handleMsg(imgConfig)
+	if s.authenticateRequest(r) {
+		go s.handleMsg(imgConfig)
 		return
 	}
 
 	http.Error(w, "Not Authorized", 401)
-	sendCallback(imgConfig.Callback_url, &CallbackMessage{
+	s.sendCallback(imgConfig.Callback_url, &api.CallbackMessage{
 		State:       "failure",
 		Description: "Not authorized",
 	})
@@ -117,19 +102,19 @@ func Log(handler http.Handler) http.Handler {
 	})
 }
 
-func authenticateRequest(r *http.Request) bool {
+func (s *Server) authenticateRequest(r *http.Request) bool {
 	key := r.URL.Query().Get("apikey")
-	for _, cfgKey := range config.Apikeys.Key {
+	for _, cfgKey := range s.config.Apikeys.Key {
 		if key == cfgKey {
 			return true
 		}
 		continue
 	}
-	return (len(config.Apikeys.Key) == 0) || false
+	return (len(s.config.Apikeys.Key) == 0) || false
 }
 
-func handleMsg(msg api.HubMessage) {
-	handlers.Call(msg)
+func (s *Server) handleMsg(msg api.HubMessage) {
+	s.handlers.Call(msg)
 
 	/*
 		//TODO: fix callback later
