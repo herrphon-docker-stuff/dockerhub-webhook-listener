@@ -1,0 +1,9 @@
+version: "2"
+
+services:
+  webhook:
+    build: .
+    ports:
+      - 3000:80
+
+
