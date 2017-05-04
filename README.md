@@ -1,4 +1,5 @@
-# DockerHub Webhook Listener
+DockerHub Webhook Listener
+==========================
 
 This is just a simple HTTP server setup to listen for and handle DockerHub
 webhook calls.
@@ -6,7 +7,10 @@ webhook calls.
 A simple `Logger` handler and a slightly more complex `Mailgun` handler are
 included for reference in creating handlers.
 
-## Usage
+
+Usage
+-----
+
 Add a config file using `-config-file`
 This file should be in INI format and is intended for use with handlers
 Register a handler in `handler.go`
@@ -26,3 +30,16 @@ Right now DockerHub doesn't really support this, but you can use an api key as a
 query param.
 To handle this, you need to add an `apikeys` section to the config file along
 with a list of `key`'s
+
+
+
+Links
+-----
+
+* <https://nathanleclaire.com/blog/2014/08/17/automagical-deploys-from-docker-hub/>
+* <https://docs.docker.com/docker-hub/webhooks/>
+
+
+* <https://github.com/fsouza/go-dockerclient>
+* <https://docs.docker.com/engine/api/get-started/>
+* <https://godoc.org/github.com/docker/docker/client> -> <https://godoc.org/github.com/moby/moby/client>
